@@ -2,7 +2,11 @@
 
 import type { UserTradingSystem, WorkbenchData } from "@tradeplaybook/shared";
 import { useCallback, useEffect, useState } from "react";
-import { loadStoredWorkbenchData, saveStoredWorkbenchData } from "../lib/workbenchStorage";
+import {
+  clearStoredWorkbenchData,
+  loadStoredWorkbenchData,
+  saveStoredWorkbenchData
+} from "../lib/workbenchStorage";
 import { OnboardingWizard } from "./OnboardingWizard";
 import { TradingWorkbench } from "./TradingWorkbench";
 
@@ -36,6 +40,11 @@ export function TradePlaybookApp({ initialData }: TradePlaybookAppProps) {
     saveStoredWorkbenchData(nextData);
   }, []);
 
+  const handleReturnToOnboarding = useCallback(() => {
+    clearStoredWorkbenchData();
+    setWorkbenchData(null);
+  }, []);
+
   if (!isHydrated) {
     return (
       <main className="flex min-h-screen items-center justify-center text-sm font-bold text-muted">
@@ -53,7 +62,13 @@ export function TradePlaybookApp({ initialData }: TradePlaybookAppProps) {
     );
   }
 
-  return <TradingWorkbench data={workbenchData} onDataChange={handleDataChange} />;
+  return (
+    <TradingWorkbench
+      data={workbenchData}
+      onDataChange={handleDataChange}
+      onReturnToOnboarding={handleReturnToOnboarding}
+    />
+  );
 }
 
 function createWorkbenchDataForTradingSystem(

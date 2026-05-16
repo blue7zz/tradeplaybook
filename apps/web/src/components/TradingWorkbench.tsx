@@ -18,9 +18,14 @@ import { DataTabs } from "./DataTabs";
 interface TradingWorkbenchProps {
   data: WorkbenchData;
   onDataChange?: (data: WorkbenchData) => void;
+  onReturnToOnboarding?: () => void;
 }
 
-export function TradingWorkbench({ data, onDataChange }: TradingWorkbenchProps) {
+export function TradingWorkbench({
+  data,
+  onDataChange,
+  onReturnToOnboarding
+}: TradingWorkbenchProps) {
   const [workbenchData, setWorkbenchData] = useState<WorkbenchData>(data);
   const [isAiBusy, setIsAiBusy] = useState(false);
 
@@ -119,11 +124,20 @@ export function TradingWorkbench({ data, onDataChange }: TradingWorkbenchProps) 
           <p className="text-xs font-bold uppercase text-muted">TradePlaybook AI</p>
           <h1 className="mt-1 text-3xl font-bold leading-tight text-ink">AI 交易工作台</h1>
         </div>
-        <div className="grid min-w-64 gap-1 rounded-lg border border-line bg-[#fbfaf7] px-4 py-3 text-right">
-          <span className="text-xs font-bold uppercase text-muted">{lightLabel}</span>
-          <strong className={`text-base font-bold ${getLightClass(workbenchData.review.light)}`}>
-            {statusLabel}
-          </strong>
+        <div className="flex items-center gap-3">
+          <button
+            className="rounded-md border border-line bg-[#fbfaf7] px-4 py-3 text-sm font-bold text-muted transition hover:border-ink hover:text-ink"
+            onClick={onReturnToOnboarding}
+            type="button"
+          >
+            返回引导页
+          </button>
+          <div className="grid min-w-64 gap-1 rounded-lg border border-line bg-[#fbfaf7] px-4 py-3 text-right">
+            <span className="text-xs font-bold uppercase text-muted">{lightLabel}</span>
+            <strong className={`text-base font-bold ${getLightClass(workbenchData.review.light)}`}>
+              {statusLabel}
+            </strong>
+          </div>
         </div>
       </header>
 

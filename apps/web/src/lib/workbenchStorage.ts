@@ -38,6 +38,18 @@ export function saveStoredWorkbenchData(data: WorkbenchData) {
   }
 }
 
+export function clearStoredWorkbenchData() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  try {
+    window.localStorage.removeItem(WORKBENCH_STORAGE_KEY);
+  } catch {
+    // 清理失败时只影响本地持久化，不阻塞页面切换。
+  }
+}
+
 function normalizeWorkbenchData(
   stored: Partial<WorkbenchData>,
   fallback: WorkbenchData

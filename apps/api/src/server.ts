@@ -11,10 +11,17 @@ import type {
   ApiHealthResponse,
   MarketCandlesResponse,
   MarketHistoryCandlesResponse,
+  OnboardingChatRequest,
+  OnboardingChatResponse,
   ReviewPlanRequest,
   ReviewPlanResponse
 } from "@tradeplaybook/shared";
-import { callStructuredAi, createMockAiFallback } from "./services/aiClient.js";
+import {
+  callStructuredAi,
+  createMockAiFallback,
+  createOnboardingChatResponse,
+  inferOnboardingInstrumentId
+} from "./services/aiClient.js";
 import { runMa30Backtest } from "./services/backtestMa30.js";
 import { fetchConfirmedHistoryKlines } from "./services/historyCandlesService.js";
 import {
@@ -23,7 +30,7 @@ import {
   parseSupportedBar,
   parseSupportedInstId
 } from "./services/klineAdapter.js";
-import { fetchOkxCandles } from "./services/okxMarketClient.js";
+import { fetchOkxCandles, fetchOkxSpotInstrument } from "./services/okxMarketClient.js";
 
 const port = Number(process.env.PORT ?? 4000);
 
@@ -35,6 +42,11 @@ function sendJson<T>(res: ServerResponse, statusCode: number, body: T) {
     "access-control-allow-headers": "content-type"
   });
   res.end(JSON.stringify(body, null, 2));
+}
+
+function sendSseEvent(res: ServerResponse, event: string, data: unknown) {
+  res.write(`event: ${event}\n`);
+  res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
 async function readJson<T>(req: IncomingMessage): Promise<T | null> {
@@ -249,6 +261,109 @@ const server = createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === "POST" && url.pathname === "/api/ai/onboarding-chat-stream") {
+    const payload = await readJson<OnboardingChatRequest>(req);
+
+    if (!isOnboardingChatRequest(payload)) {
+      sendJson(res, 400, {
+        error: "message, stepKey, stepTitle and answers are required"
+      });
+      return;
+    }
+
+    res.writeHead(200, {
+      "content-type": "text/event-stream; charset=utf-8",
+      "cache-control": "no-cache, no-transform",
+      connection: "keep-alive",
+      "access-control-allow-origin": "*"
+    });
+
+    try {
+      sendSseEvent(res, "progress", {
+        step: "context",
+        message: "正在整理当前步骤、已选交易品种、周期、风格、风险参数。"
+      });
+
+      const inferred = await inferOnboardingInstrumentId(payload);
+      sendSseEvent(res, "progress", {
+        step: "ai_inference",
+        message: inferred.instId
+          ? `AI 识别到候选交易对 ${inferred.instId}，来源：${inferred.source}。`
+          : `AI 未识别到明确交易对：${inferred.reason}`
+      });
+
+      sendSseEvent(res, "progress", {
+        step: "okx_lookup",
+        message: inferred.instId
+          ? `正在调用 OKX SPOT 公开交易对查询：${inferred.instId}。`
+          : "跳过 OKX 查询，等待 AI 给出补充问题。"
+      });
+
+      const instrument = inferred.instId
+        ? await fetchOkxSpotInstrument(inferred.instId)
+        : null;
+
+      sendSseEvent(res, "progress", {
+        step: "okx_result",
+        message: instrument
+          ? `OKX 已确认 ${instrument.displayName}，状态 ${instrument.state ?? "未知"}。`
+          : "OKX 未确认该 SPOT 交易对。"
+      });
+
+      sendSseEvent(res, "progress", {
+        step: "ai_response",
+        message: "正在让 AI 根据 OKX 查询结果和当前体系草稿生成可回显建议。"
+      });
+
+      const response = await createOnboardingChatResponse(payload, instrument);
+      sendSseEvent(res, "final", response);
+    } catch (error) {
+      sendSseEvent(res, "error", {
+        message: "AI 引导流程暂时失败，可以先使用快捷选项继续。",
+        error: error instanceof Error ? error.message : "Onboarding stream failed"
+      });
+    } finally {
+      res.end();
+    }
+    return;
+  }
+
+  if (req.method === "POST" && url.pathname === "/api/ai/onboarding-chat") {
+    const payload = await readJson<OnboardingChatRequest>(req);
+
+    if (!isOnboardingChatRequest(payload)) {
+      sendJson(res, 400, {
+        error: "message, stepKey, stepTitle and answers are required"
+      });
+      return;
+    }
+
+    try {
+      const inferred = await inferOnboardingInstrumentId(payload);
+      const instrument = inferred.instId
+        ? await fetchOkxSpotInstrument(inferred.instId)
+        : null;
+      const response: OnboardingChatResponse = await createOnboardingChatResponse(
+        payload,
+        instrument
+      );
+
+      sendJson(res, 200, response);
+    } catch (error) {
+      const response: OnboardingChatResponse = {
+        message:
+          "我暂时无法完成 OKX 交易对查询。请稍后再试；辅助决策，不是投资建议。",
+        source: "mock-fallback",
+        actions: [],
+        error: error instanceof Error ? error.message : "Onboarding AI request failed",
+        generatedAt: new Date().toISOString()
+      };
+
+      sendJson(res, 200, response);
+    }
+    return;
+  }
+
   sendJson(res, 404, {
     error: "not found"
   });
@@ -277,5 +392,21 @@ function isAiChatRequest(payload: AiChatRequest | null): payload is AiChatReques
     Boolean(payload.context.tradingSystem) &&
     Boolean(payload.context.market) &&
     "currentPlan" in payload.context
+  );
+}
+
+function isOnboardingChatRequest(
+  payload: OnboardingChatRequest | null
+): payload is OnboardingChatRequest {
+  return (
+    Boolean(payload) &&
+    typeof payload?.message === "string" &&
+    payload.message.trim().length > 0 &&
+    typeof payload.stepKey === "string" &&
+    typeof payload.stepTitle === "string" &&
+    Boolean(payload.answers) &&
+    typeof payload.answers.marketScope === "string" &&
+    Array.isArray(payload.answers.timeframes) &&
+    typeof payload.answers.tradingStyle === "string"
   );
 }

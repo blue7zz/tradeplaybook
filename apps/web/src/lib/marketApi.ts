@@ -4,6 +4,8 @@ import type {
   BacktestResult,
   MarketCandlesResponse,
   MarketHistoryCandlesResponse,
+  OnboardingChatRequest,
+  OnboardingChatResponse,
   SupportedInstrumentId,
   SupportedKlineBar
 } from "@tradeplaybook/shared";
@@ -59,6 +61,88 @@ export async function postAiChat(payload: AiChatRequest): Promise<AiChatResponse
     },
     body: JSON.stringify(payload)
   });
+}
+
+export async function postOnboardingChat(
+  payload: OnboardingChatRequest
+): Promise<OnboardingChatResponse> {
+  const url = new URL("/api/ai/onboarding-chat", API_BASE_URL);
+
+  return fetchJson<OnboardingChatResponse>(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+}
+
+export async function streamOnboardingChat(
+  payload: OnboardingChatRequest,
+  handlers: {
+    onProgress: (data: { step: string; message: string }) => void;
+    onFinal: (data: OnboardingChatResponse) => void;
+    onError: (data: { message: string; error?: string }) => void;
+  }
+) {
+  const url = new URL("/api/ai/onboarding-chat-stream", API_BASE_URL);
+  const response = await fetch(url, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  });
+
+  if (!response.ok || !response.body) {
+    throw new Error(`API stream request failed with ${response.status}`);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+
+    if (done) {
+      break;
+    }
+
+    buffer += decoder.decode(value, { stream: true });
+    const events = buffer.split("\n\n");
+    buffer = events.pop() ?? "";
+
+    for (const eventChunk of events) {
+      const event = parseSseEvent(eventChunk);
+
+      if (!event) {
+        continue;
+      }
+
+      if (event.event === "progress") {
+        handlers.onProgress(event.data as { step: string; message: string });
+      } else if (event.event === "final") {
+        handlers.onFinal(event.data as OnboardingChatResponse);
+      } else if (event.event === "error") {
+        handlers.onError(event.data as { message: string; error?: string });
+      }
+    }
+  }
+}
+
+function parseSseEvent(chunk: string) {
+  const eventLine = chunk.split("\n").find((line) => line.startsWith("event: "));
+  const dataLine = chunk.split("\n").find((line) => line.startsWith("data: "));
+
+  if (!eventLine || !dataLine) {
+    return null;
+  }
+
+  return {
+    event: eventLine.slice("event: ".length),
+    data: JSON.parse(dataLine.slice("data: ".length)) as unknown
+  };
 }
 
 async function fetchJson<T>(url: URL, init?: RequestInit): Promise<T> {

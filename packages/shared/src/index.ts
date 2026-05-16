@@ -680,6 +680,75 @@ export interface AiChatResponse {
   generatedAt: string;
 }
 
+/** OKX 公开市场交易对信息，已经转换为项目内部格式，不暴露 OKX 原始数组结构。 */
+export interface MarketInstrument {
+  /** OKX 标准交易对，例如 XRP-USDT。 */
+  instId: string;
+  /** 页面展示交易对，例如 XRP/USDT。 */
+  displayName: string;
+  /** 标的币种。 */
+  baseCurrency?: string;
+  /** 计价币种。 */
+  quoteCurrency?: string;
+  /** 市场类型，MVP 先使用 SPOT。 */
+  instrumentType?: string;
+  /** OKX 返回的交易状态，例如 live。 */
+  state?: string;
+  /** 最小下单数量，仅用于介绍，不用于下单。 */
+  minSize?: string;
+  /** 数量步长，仅用于介绍，不用于下单。 */
+  lotSize?: string;
+  /** 价格步长，仅用于介绍，不用于下单。 */
+  tickSize?: string;
+}
+
+/** Onboarding AI 对话请求，携带当前步骤和已选择上下文。 */
+export interface OnboardingChatRequest {
+  /** 用户在引导页输入的内容。 */
+  message: string;
+  /** 当前步骤 key。 */
+  stepKey: string;
+  /** 当前步骤标题。 */
+  stepTitle: string;
+  /** 当前已收集的交易体系草稿。 */
+  answers: {
+    marketScope: string;
+    timeframes: string[];
+    tradingStyle: string;
+    maxRiskPerTradePercent: number;
+    maxDailyTradeCount: number;
+    commonMistakes: string[];
+    preferredSignals: string[];
+  };
+}
+
+/** Onboarding AI 可返回的动作。 */
+export type OnboardingAiAction =
+  | {
+      /** 建议把 OKX 已存在交易对加入交易体系草稿。 */
+      type: "SUGGEST_MARKET";
+      /** 标准化展示值，例如 XRP/USDT。 */
+      marketScope: string;
+      /** OKX 交易对信息。 */
+      instrument: MarketInstrument;
+    };
+
+/** Onboarding AI 对话响应。 */
+export interface OnboardingChatResponse {
+  /** 给用户看的回复。 */
+  message: string;
+  /** 来源。 */
+  source: "ai" | "mock-fallback";
+  /** 可由前端展示给用户确认的动作。 */
+  actions: OnboardingAiAction[];
+  /** 查询到的 OKX 交易对。 */
+  instrument?: MarketInstrument;
+  /** 错误信息，仅 fallback 时出现。 */
+  error?: string;
+  /** 生成时间。 */
+  generatedAt: string;
+}
+
 /** 日报、周报或月报，MVP 阶段由 mock 交易记录生成摘要。 */
 export interface PeriodReport {
   /** 报告唯一标识。 */
