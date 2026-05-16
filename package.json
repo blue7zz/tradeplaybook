@@ -1,0 +1,20 @@
+{
+  "name": "tradeplaybook",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@9.15.5",
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:web": "pnpm --filter @tradeplaybook/web dev",
+    "dev:api": "pnpm --filter @tradeplaybook/api dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=18.18.0",
+    "pnpm": ">=9.0.0"
+  }
+}

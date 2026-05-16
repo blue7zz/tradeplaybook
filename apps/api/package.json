@@ -1,0 +1,20 @@
+{
+  "name": "@tradeplaybook/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "start": "tsx src/server.ts",
+    "build": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@tradeplaybook/mock-data": "workspace:*",
+    "@tradeplaybook/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.3",
+    "tsx": "^4.19.4"
+  }
+}
